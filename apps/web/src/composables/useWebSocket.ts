@@ -108,11 +108,14 @@ export function useWebSocket({
       };
 
       ws.onerror = (err) => {
-        console.error('[WS:ERROR]', err);
-        ws.close();
+        // 如果是卸载清理引发的中断，静默忽略
+        if (isUnmountedRef.current) return;
+        console.warn('[WS:WARN] WebSocket connection interrupted');
       };
     } catch (err) {
-      console.error('[WS:CONN_FAIL]', err);
+      if (!isUnmountedRef.current) {
+        console.error('[WS:CONN_FAIL]', err);
+      }
     }
   }, [url, username, send]);
 
@@ -120,11 +123,11 @@ export function useWebSocket({
   const reconnectNow = useCallback(() => {
     if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     reconnectAttemptRef.current = 0;
-    if (wsRef.current) wsRef.current.close();
+    if (wsRef.current) wsRef.current.close(1000, 'Manual reconnect');
     connect();
   }, [connect]);
 
-  // 生命周期管理
+  // 生命周期管理 (优雅兼容 React 18 StrictMode 双重挂载)
   useEffect(() => {
     isUnmountedRef.current = false;
     connect();
@@ -133,7 +136,17 @@ export function useWebSocket({
       isUnmountedRef.current = true;
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
-      if (wsRef.current) wsRef.current.close();
+
+      if (wsRef.current) {
+        const socket = wsRef.current;
+        // 关键防御：如果在 CONNECTING 阶段，等握手完成后再正常挥手断开，杜绝浏览器 abort 警告
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.close(1000, 'Component unmounted');
+        } else if (socket.readyState === WebSocket.CONNECTING) {
+          socket.onopen = () => socket.close(1000, 'Component unmounted');
+        }
+        wsRef.current = null;
+      }
     };
   }, [connect]);
 
