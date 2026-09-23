@@ -1,0 +1,13 @@
+{
+  "name": "co-editor-root",
+  "private": true,
+  "packageManager": "pnpm@10.33.1",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @co-editor/api --filter @co-editor/web dev",
+    "build": "pnpm --filter @co-editor/shared build && pnpm --filter @co-editor/api build && pnpm --filter @co-editor/web build",
+    "test": "pnpm --filter @co-editor/api test"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
