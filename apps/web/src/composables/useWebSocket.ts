@@ -27,6 +27,11 @@ export function useWebSocket({
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isUnmountedRef = useRef(false);
 
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
+  const onReconnectedRef = useRef(onReconnected);
+  onReconnectedRef.current = onReconnected;
+
   // 发送消息辅助函数
   const send = useCallback(<T,>(action: WSAction, payload: T): boolean => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -71,8 +76,8 @@ export function useWebSocket({
           send(WSAction.PING, {});
         }, 15000);
 
-        if (wasReconnecting && onReconnected) {
-          onReconnected();
+        if (wasReconnecting && onReconnectedRef.current) {
+          onReconnectedRef.current();
         }
       };
 
@@ -80,7 +85,7 @@ export function useWebSocket({
         if (isUnmountedRef.current) return;
         try {
           const envelope = JSON.parse(event.data);
-          onMessage(envelope);
+          onMessageRef.current(envelope);
         } catch (err) {
           console.error('[WS:PARSE_ERR]', err);
         }
@@ -109,7 +114,7 @@ export function useWebSocket({
     } catch (err) {
       console.error('[WS:CONN_FAIL]', err);
     }
-  }, [url, username, send, onMessage, onReconnected]);
+  }, [url, username, send]);
 
   // 手动重连
   const reconnectNow = useCallback(() => {

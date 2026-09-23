@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import { WSAction, type WSEnvelope } from '@co-editor/shared';
 import { useWebSocket } from './composables/useWebSocket.js';
 import { usePresence } from './composables/usePresence.js';
@@ -35,13 +35,20 @@ export const App: React.FC = () => {
     return `${protocol}//${host}:8080`;
   }, []);
 
-  // 1. 底层消息分发中继
+  const presenceRef = useRef<ReturnType<typeof usePresence> | null>(null);
+  const syncRef = useRef<ReturnType<typeof useEditorSync> | null>(null);
+
+  // 1. 底层消息分发中继 (引用稳定化)
   const handleServerMessage = useCallback((envelope: WSEnvelope) => {
     if (envelope.action === WSAction.PRESENCE_BROADCAST) {
-      presence.handlePresenceBroadcast(envelope.payload as any);
+      presenceRef.current?.handlePresenceBroadcast(envelope.payload as any);
       return;
     }
-    sync.handleServerMessage(envelope);
+    syncRef.current?.handleServerMessage(envelope);
+  }, []);
+
+  const handleReconnected = useCallback(() => {
+    syncRef.current?.triggerSyncOnReconnect();
   }, []);
 
   // 2. 初始化网络 Hook
@@ -50,8 +57,8 @@ export const App: React.FC = () => {
     docId,
     clientId,
     username,
-    onMessage: (envelope) => handleServerMessage(envelope),
-    onReconnected: () => sync.triggerSyncOnReconnect()
+    onMessage: handleServerMessage,
+    onReconnected: handleReconnected
   });
 
   // 3. 初始化协同感知 Hook
@@ -59,6 +66,7 @@ export const App: React.FC = () => {
     clientId,
     send
   });
+  presenceRef.current = presence;
 
   // 4. 初始化状态同步 Hook
   const sync = useEditorSync({
@@ -66,6 +74,7 @@ export const App: React.FC = () => {
     docId,
     send
   });
+  syncRef.current = sync;
 
   return (
     <div className="min-h-screen bg-[#F2F2F7] flex flex-col pt-4">
